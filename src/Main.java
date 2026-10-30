@@ -58,25 +58,37 @@ class Logger {
     }
 }
 
+class ParenthesesValidator {
+    public boolean isValid(String input) {
+        int open = 0; // the number of "(" that are still waiting for match
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+
+            if (c == '('){
+                open++;
+            } else if (c == ')') {
+                if (open == 0) {
+                    return false; // ")" with nothing to close
+                }
+                open--; // found a matching pair
+            }
+        }
+        return open == 0; // every "(" must be closed
+    }
+}
+
 public class Main {
     public static void main(String[] args) {
-        Logger logger = new Logger("Parentheses");
+        ParenthesesValidator validator = new ParenthesesValidator();
 
-        String[] format = {
-                "[%t] [%l] %n: %m",
-                "[%l] %m",
-                "%n: %mj",
-                "[%t] %m",
-                "%l - %n - %m"
-        };
+        String[] inputs   = { "()",  ")((()))", "(",   "(())((()())())", "",   "(()", "())" };
+        boolean[] expected = { true,  false,     false, true,             true, false, false };
 
-        for (String f : format) {
-            Logger.setFormat(f);
-            logger.log(LogLevel.INFO, "Valid input");
+        for (int i = 0; i < inputs.length; i++) {
+            boolean result = validator.isValid(inputs[i]);
+            String status = (result == expected[i]) ? "PASS" : "FAIL";
+            System.out.println(status + "  \"" + inputs[i] + "\"  expected=" + expected[i] + "  got=" + result);
         }
-
-        // a message that contains placeholder must stay unchanged
-        Logger.setFormat("%l: %m");
-        logger.log(LogLevel.ERROR, "100% sure, %n is not replaced here");
     }
 }
