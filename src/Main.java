@@ -1,3 +1,6 @@
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+
 enum LogLevel {
     TRACE, INFO, WARN, ERROR
 }
@@ -6,6 +9,7 @@ class Logger {
     private String name; // logger name
     static LogLevel level = LogLevel.INFO;
     static String format = "[%t] [%l] %n: %m"; // format ex: [14:30:25] [INFO] Parentheses: Valid input
+    private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
     public Logger(String name) {
         this.name = name;
     }
@@ -21,26 +25,58 @@ class Logger {
             return;
         }
 // TODO: Format and print the message.
-        System.out.println(msgLevel + " " + name + ": " + message);
+        System.out.println(formatMessage(msgLevel, message));
+    }
+
+    private String formatMessage(LogLevel msgLevel, String message) {
+        StringBuilder result = new StringBuilder();
+
+        for (int i=0; i< format.length(); i++) {
+            char c =  format.charAt(i);
+
+            if (c == '%' && i+1 < format.length()) {
+                char next= format.charAt(i+1);
+                String value = switch (next) {
+                    case 't' -> LocalTime.now().format(timeFormatter);
+                    case 'm' -> message;
+                    case 'n' -> name;
+                    case 'l' -> msgLevel.toString();
+                    default -> null;
+                };
+
+                if (value != null) {
+                    result.append(value);
+                    i++; // skip the letter after %
+                    continue;
+                }
+            }
+
+            result.append(c);
+        }
+
+        return result.toString();
     }
 }
 
 public class Main {
     public static void main(String[] args) {
-        Logger logger = new Logger("Test");
+        Logger logger = new Logger("Parentheses");
 
-        System.out.println("level = INFO");
-        logger.log(LogLevel.TRACE, "trace");
-        logger.log(LogLevel.INFO, "info");
-        logger.log(LogLevel.WARN, "warn");
-        logger.log(LogLevel.ERROR, "error");
+        String[] format = {
+                "[%t] [%l] %n: %m",
+                "[%l] %m",
+                "%n: %mj",
+                "[%t] %m",
+                "%l - %n - %m"
+        };
 
-        Logger.setLevel(LogLevel.WARN);
+        for (String f : format) {
+            Logger.setFormat(f);
+            logger.log(LogLevel.INFO, "Valid input");
+        }
 
-        System.out.println("level = WARN");
-        logger.log(LogLevel.TRACE, "trace");
-        logger.log(LogLevel.INFO, "info");
-        logger.log(LogLevel.WARN, "warn");
-        logger.log(LogLevel.ERROR, "error");
+        // a message that contains placeholder must stay unchanged
+        Logger.setFormat("%l: %m");
+        logger.log(LogLevel.ERROR, "100% sure, %n is not replaced here");
     }
 }
