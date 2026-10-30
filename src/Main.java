@@ -17,13 +17,30 @@ class Logger {
     }
     public void log(LogLevel msgLevel, String message) {
 // TODO: Filter messages by level.
+        if (msgLevel.ordinal() < level.ordinal()) {
+            return;
+        }
 // TODO: Format and print the message.
+        System.out.println(msgLevel + " " + name + ": " + message);
     }
 }
 
 public class Main {
     public static void main(String[] args) {
         Logger logger = new Logger("Test");
-        System.out.println("Logger was created");
+
+        System.out.println("level = INFO");
+        logger.log(LogLevel.TRACE, "trace");
+        logger.log(LogLevel.INFO, "info");
+        logger.log(LogLevel.WARN, "warn");
+        logger.log(LogLevel.ERROR, "error");
+
+        Logger.setLevel(LogLevel.WARN);
+
+        System.out.println("level = WARN");
+        logger.log(LogLevel.TRACE, "trace");
+        logger.log(LogLevel.INFO, "info");
+        logger.log(LogLevel.WARN, "warn");
+        logger.log(LogLevel.ERROR, "error");
     }
 }
