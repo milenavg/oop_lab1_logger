@@ -6,11 +6,19 @@ import java.util.Random;
 enum LogLevel {
     TRACE, INFO, WARN, ERROR
 }
+
+class Formatter {
+    static String format = "[%t] [%l] %n: %m"; // format ex: [14:30:25] [INFO] Parentheses: Valid input
+    public static void setFormat(String newFormat) {
+        format = newFormat;
+    }
+
+}
+
 // add formatting
 class Logger {
     private String name; // logger name
     static LogLevel level = LogLevel.INFO;
-    static String format = "[%t] [%l] %n: %m"; // format ex: [14:30:25] [INFO] Parentheses: Valid input
     private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final Random RANDOM = new Random();
 
@@ -25,9 +33,6 @@ class Logger {
     }
     public static void setLevel(LogLevel newLevel) {
         level = newLevel;
-    }
-    public static void setFormat(String newFormat) {
-        format = newFormat;
     }
     public void log(LogLevel msgLevel, String message) {
 // TODO: Filter messages by level.
@@ -119,16 +124,16 @@ public class Main {
         Logger.setFormat("[%t] [%l] %n: %m");
 
         // 1) one input with TRACE level: we see every step
-        System.out.println("===== level = TRACE =====");
+        System.out.println(" level = TRACE ");
         Logger.setLevel(LogLevel.TRACE);
         validator.isValid("(()");
 
         // 2) all test cases with INFO level: TRACE messages are hidden
         System.out.println();
-        System.out.println("===== level = INFO =====");
+        System.out.println(" level = INFO ");
         Logger.setLevel(LogLevel.INFO);
 
-        String[] inputs    = { "()",  ")((()))", "(",   "(())((()())())" };
+        String[] inputs    = { "())()",  ")((()))", "(",   "(())((()())())" };
         boolean[] expected = { true,  false,     false, true };
 
         for (int i = 0; i < inputs.length; i++) {
