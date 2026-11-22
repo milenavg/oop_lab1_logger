@@ -971,9 +971,12 @@ public class Main {
 
         // with an argument: only that file; without: Monday and Tuesday
         // String[] commandFiles = { commandFile };
+        // String[] commandFiles = (args.length > 0)
+        //         ? new String[] { args[0] }
+        //         : new String[] { "shop-monday.txt", "shop-tuesday.txt" };
         String[] commandFiles = (args.length > 0)
                 ? new String[] { args[0] }
-                : new String[] { "shop-monday.txt", "shop-tuesday.txt" };
+                : new String[] { "shop-monday.txt", "shop-tuesday.txt", "shop-wednesday.txt" };
 
         // for (String file : commandFiles) {
         //     System.out.println();
@@ -988,31 +991,44 @@ public class Main {
         shopManagerLogger = managerLogger;
         shopDisplayLogger = displayLogger;
 
-        for (String file : commandFiles) {
-            System.out.println();
-            System.out.println("Shop: running " + file);
-            List<String> commands = new CommandReader(file, readerLogger).readLines();
+        // run ALL files with different minimum levels:
+        //  TRACE -> everything
+        //  INFO  -> no TRACE (no "created" / "assigned" messages)
+        //  ERROR -> only ERROR (no TRACE, INFO or WARN)
+        // the results of COMPARE / ASSIST are not log messages (System.out), so they always appear
+        LogLevel[] levels = { LogLevel.TRACE, LogLevel.INFO, LogLevel.ERROR };
 
-            // a new day: start with empty lists
-            managers.clear();
-            displays.clear();
-
-            for (int i = 0; i < commands.size(); i++) {
-                // parseCommand(commands.get(i), i + 1); // line numbers start from 1
-                parseCommandSafely(commands.get(i), i + 1); // never crashes because of one line
-            }
-
-            // what was created today
-            System.out.print("Managers:");
-            for (DisplayManager m : managers) {
-                System.out.print(" " + m.getName());
-            }
+        for (LogLevel minLevel : levels) {
+            Logger.setLevel(minLevel); // static: one level for ALL loggers
             System.out.println();
-            System.out.print("Displays:");
-            for (Display d : displays) {
-                System.out.print(" " + d.getModel());
+            System.out.println("========== Shop with level " + minLevel + " ==========");
+
+            for (String file : commandFiles) {
+                System.out.println();
+                System.out.println("Shop: running " + file + " (level " + minLevel + ")");
+                List<String> commands = new CommandReader(file, readerLogger).readLines();
+
+                // a new day: start with empty lists
+                managers.clear();
+                displays.clear();
+
+                for (int i = 0; i < commands.size(); i++) {
+                    // parseCommand(commands.get(i), i + 1); // line numbers start from 1
+                    parseCommandSafely(commands.get(i), i + 1); // never crashes because of one line
+                }
+
+                // what was created today
+                System.out.print("Managers:");
+                for (DisplayManager m : managers) {
+                    System.out.print(" " + m.getName());
+                }
+                System.out.println();
+                System.out.print("Displays:");
+                for (Display d : displays) {
+                    System.out.print(" " + d.getModel());
+                }
+                System.out.println();
             }
-            System.out.println();
         }
     }
 }

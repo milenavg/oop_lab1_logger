@@ -1,0 +1,45 @@
+# Wednesday at the shop. My own tests: things Monday and Tuesday do not check.
+
+# 1) commands in lowercase / mixed case work (only NAMES are case-sensitive)
+manager Dan
+Manager Eva
+display Dell-S2721DGF 2560 1440 109.0
+Display HP-M24f 1920 1080 92.0
+DISPLAY Asus-ProArt-PA32UCG 3840 2160 137.7
+
+# 2) extra spaces and tabs between words, spaces before the command
+   ASSIGN    Dell-S2721DGF     Dan
+	ASSIGN	HP-M24f	Dan
+ASSIGN Asus-ProArt-PA32UCG Dan
+    # a comment with spaces before it
+
+# 3) an EXTRA word (Tuesday only had missing words)
+MANAGER Finn Junior
+ASSIGN HP-M24f Eva today
+
+# 4) numbers that ARE numbers, but are not valid sizes
+DISPLAY Broken-Zero 0 1080 90.0
+DISPLAY Broken-Negative 1920 -1080 90.0
+DISPLAY Broken-NaN 1920 1080 NaN
+DISPLAY Broken-Infinity 1920 1080 Infinity
+DISPLAY Broken-Decimal 1920.5 1080 90.0
+
+# 5) the same display created twice (Tuesday only had the same manager twice)
+DISPLAY HP-M24f 1920 1080 92.0
+
+# 6) COMPARE a display with itself, and with a display that does not exist
+COMPARE HP-M24f HP-M24f
+COMPARE HP-M24f Philips-Evnia
+
+# 7) BUY a display that exists, from a manager that exists, but it is assigned to someone else
+ASSIGN HP-M24f Eva
+BUY Dell-S2721DGF Eva
+
+# 8) ASSIST with exactly 2 displays left after a purchase (one comparison only)
+BUY HP-M24f Dan
+ASSIST Dan
+
+# 9) a sold display is assigned again to another manager (the object still exists)
+ASSIGN HP-M24f Dan
+ASSIST Eva
+BUY HP-M24f Eva
