@@ -58,28 +58,47 @@ class Formatter {
 
 }
 
-// add formatting
-class Logger {
-    private String name; // logger name
-    static LogLevel level = LogLevel.INFO;
+class ConsoleSink {
+    public void write(String line) {
+        System.out.println(line);
+    }
+}
 
+class Logger {
+    private final String name;
+    private final Formatter formatter;
+    private final ConsoleSink sink;
+    static LogLevel level = LogLevel.INFO;
+    // composition: the logger creates its own formatter and sink,
+    // nobody else has a reference to them, they live and die with the logger
     public Logger(String name) {
         this.name = name;
+        this.formatter = new Formatter();
+        this.sink = new ConsoleSink();
     }
+
+    // aggregation: formatter and sink are created outside and only used here,
+    // the same objects can be shared by many loggers
+    public Logger(String name, Formatter formatter, ConsoleSink sink) {
+        this.name = name;
+        this.formatter = formatter;
+        this.sink = sink;
+    }
+
     public static void setLevel(LogLevel newLevel) {
         level = newLevel;
     }
+
     public void log(LogLevel msgLevel, String message) {
-// TODO: Filter messages by level.
+        // filter by level
         if (msgLevel.ordinal() < level.ordinal()) {
             return;
         }
-// TODO: Format and print the message.
-        //System.out.println(formatMessage(msgLevel, message));
+        // ask the formatter for the line
+        String line = formatter.format(name, msgLevel, message);
+        // give the line to the sink
+        sink.write(line);
     }
-
-
-
 }
 
 class ParenthesesValidator {
@@ -122,6 +141,7 @@ class ParenthesesValidator {
 
 public class Main {
     public static void main(String[] args) {
+        System.out.println("Task 1: Formatter test");
         Formatter f1 = new Formatter();
         Formatter f2 = new Formatter();
 
@@ -137,6 +157,26 @@ public class Main {
 
         Formatter.setFormat("%n: %m");
         System.out.println(f1.format("Test", LogLevel.INFO, "Ratio is 100%n"));
+
+        System.out.println();
+        System.out.println("Task 2: composition");
+        Formatter.setFormat("[%l] %n: %m");
+        Logger.setLevel(LogLevel.INFO);
+        Logger own = new Logger("Own"); // creates its own Formatter and ConsoleSink
+        own.log(LogLevel.INFO, "I built my own formatter and sink");
+        own.log(LogLevel.TRACE, "hidden: TRACE is below INFO");
+
+        System.out.println();
+        System.out.println("Task 2: aggregation");
+        Formatter sharedFormatter = new Formatter();
+        ConsoleSink sharedSink = new ConsoleSink();
+        Logger first = new Logger("First", sharedFormatter, sharedSink);
+        Logger second = new Logger("Second", sharedFormatter, sharedSink);
+        first.log(LogLevel.INFO, "I use the shared formatter and sink");
+        second.log(LogLevel.WARN, "me too, same objects");
+
+        System.out.println();
+        System.out.println("Lab 1: parentheses validator");
         ParenthesesValidator validator = new ParenthesesValidator();
 
         Formatter.setFormat("[%t] [%l] %n: %m");
@@ -152,7 +192,7 @@ public class Main {
         Logger.setLevel(LogLevel.INFO);
 
         String[] inputs    = { "())()",  ")((()))", "(",   "(())((()())())" };
-        boolean[] expected = { true,  false,     false, true };
+        boolean[] expected = { false, false,     false, true };
 
         for (int i = 0; i < inputs.length; i++) {
             System.out.println("--- input: \"" + inputs[i] + "\" ---");
