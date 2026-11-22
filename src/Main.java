@@ -12,13 +12,6 @@ class Formatter {
     public static void setFormat(String newFormat) {
         format = newFormat;
     }
-
-}
-
-// add formatting
-class Logger {
-    private String name; // logger name
-    static LogLevel level = LogLevel.INFO;
     private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final Random RANDOM = new Random();
 
@@ -28,22 +21,7 @@ class Logger {
             LogLevel.WARN,  new String[] { "Something looks odd", "Proceed with caution", "This was unexpected" },
             LogLevel.ERROR, new String[] { "Something went wrong", "This cannot continue", "Please check the input" }
     );
-    public Logger(String name) {
-        this.name = name;
-    }
-    public static void setLevel(LogLevel newLevel) {
-        level = newLevel;
-    }
-    public void log(LogLevel msgLevel, String message) {
-// TODO: Filter messages by level.
-        if (msgLevel.ordinal() < level.ordinal()) {
-            return;
-        }
-// TODO: Format and print the message.
-        System.out.println(formatMessage(msgLevel, message));
-    }
-
-    private String formatMessage(LogLevel msgLevel, String message) {
+    public String format(String loggerName, LogLevel msgLevel, String message) {
         StringBuilder result = new StringBuilder();
 
         for (int i=0; i< format.length(); i++) {
@@ -54,7 +32,7 @@ class Logger {
                 String value = switch (next) {
                     case 't' -> LocalTime.now().format(timeFormatter);
                     case 'm' -> message;
-                    case 'n' -> name;
+                    case 'n' -> loggerName;
                     case 'l' -> msgLevel.toString();
                     case 'r' -> randomMessage(msgLevel);
                     default -> null;
@@ -72,11 +50,36 @@ class Logger {
 
         return result.toString();
     }
-
     private String randomMessage(LogLevel msgLevel) {
         String[] options = RANDOM_MESSAGES.get(msgLevel);
         return options[RANDOM.nextInt(options.length)];
     }
+
+
+}
+
+// add formatting
+class Logger {
+    private String name; // logger name
+    static LogLevel level = LogLevel.INFO;
+
+    public Logger(String name) {
+        this.name = name;
+    }
+    public static void setLevel(LogLevel newLevel) {
+        level = newLevel;
+    }
+    public void log(LogLevel msgLevel, String message) {
+// TODO: Filter messages by level.
+        if (msgLevel.ordinal() < level.ordinal()) {
+            return;
+        }
+// TODO: Format and print the message.
+        //System.out.println(formatMessage(msgLevel, message));
+    }
+
+
+
 }
 
 class ParenthesesValidator {
@@ -119,9 +122,24 @@ class ParenthesesValidator {
 
 public class Main {
     public static void main(String[] args) {
+        Formatter f1 = new Formatter();
+        Formatter f2 = new Formatter();
+
+        Formatter.setFormat("[%t] [%l] %n: %m");
+        System.out.println(f1.format("Test", LogLevel.INFO, "hello"));
+
+        Formatter.setFormat("%l | %m");
+        System.out.println(f1.format("Test", LogLevel.WARN, "second format"));
+        System.out.println(f2.format("Other", LogLevel.ERROR, "from f2"));
+
+        Formatter.setFormat("[%l] %r -> %m");
+        System.out.println(f1.format("Test", LogLevel.INFO, "random"));
+
+        Formatter.setFormat("%n: %m");
+        System.out.println(f1.format("Test", LogLevel.INFO, "Ratio is 100%n"));
         ParenthesesValidator validator = new ParenthesesValidator();
 
-        Logger.setFormat("[%t] [%l] %n: %m");
+        Formatter.setFormat("[%t] [%l] %n: %m");
 
         // 1) one input with TRACE level: we see every step
         System.out.println(" level = TRACE ");
@@ -146,7 +164,7 @@ public class Main {
         // extra credit: %r
         System.out.println();
         System.out.println("%r placeholder");
-        Logger.setFormat("[%l] %r -> %m");
+        Formatter.setFormat("[%l] %r -> %m");
         Logger.setLevel(LogLevel.TRACE);
         Logger demo = new Logger("Demo");
         for (int i = 0; i < 3; i++) {
