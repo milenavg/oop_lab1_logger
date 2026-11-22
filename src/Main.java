@@ -372,6 +372,15 @@ class DisplayManager {
         return name;
     }
 
+    // used by the command parser to check BEFORE acting, so it can log the line number
+    public boolean hasDisplay(Display d) {
+        return assignedDisplays.contains(d);
+    }
+
+    public int getDisplayCount() {
+        return assignedDisplays.size();
+    }
+
     // adds a display to the list (only the reference is stored, not a copy)
     public void assignDisplay(Display d) {
         // ERROR: there is nothing to assign
@@ -489,6 +498,23 @@ public class Main {
     static Logger shopManagerLogger;  // given to every manager that is created
     static Logger shopDisplayLogger;  // given to every display that is created
 
+    // Error handling:
+    //  ERROR = the line can't be executed: unknown command, missing/extra word, not a number,
+    //          value <= 0, manager/display does not exist, buying a display the manager does not have
+    //  WARN  = the line is strange, but nothing is broken and the shop stays correct:
+    //          MANAGER/DISPLAY that already exists (the object the file wants is already there),
+    //          the same display assigned twice to a manager, ASSIST with fewer than 2 displays
+    //  Every ERROR/WARN contains the line number; the line is skipped and the next one runs.
+
+    // safety net: whatever happens inside one line, the program never crashes
+    static void parseCommandSafely(String line, int lineNumber) {
+        try {
+            parseCommand(line, lineNumber);
+        } catch (Exception e) {
+            shopParserLogger.error("line %: unexpected problem (%), the line is skipped", lineNumber, e);
+        }
+    }
+
     // takes ONE line, splits it into words and runs the right action
     static void parseCommand(String line, int lineNumber) {
         String trimmed = line.trim();
@@ -519,9 +545,19 @@ public class Main {
         }
         Display d = displayOrError(words[1], lineNumber);
         DisplayManager m = managerOrError(words[2], lineNumber);
-        if (d != null && m != null) {
-            m.assignDisplay(d); // WARN inside if it is assigned twice
+        // if (d != null && m != null) {
+        //     m.assignDisplay(d); // WARN inside if it is assigned twice
+        // }
+        if (d == null || m == null) {
+            return;
         }
+        // WARN: not broken, the manager already has it -> the line is skipped
+        if (m.hasDisplay(d)) {
+            shopParserLogger.warn("line %: % already has %, the second ASSIGN is ignored",
+                    lineNumber, m.getName(), d.getModel());
+            return;
+        }
+        m.assignDisplay(d);
     }
 
     // COMPARE model1 model2
@@ -542,9 +578,19 @@ public class Main {
             return;
         }
         DisplayManager m = managerOrError(words[1], lineNumber);
-        if (m != null) {
-            m.assist(); // WARN inside if there is nothing to compare
+        // if (m != null) {
+        //     m.assist(); // WARN inside if there is nothing to compare
+        // }
+        if (m == null) {
+            return;
         }
+        // WARN: the command is correct, the manager exists, there is just nothing to compare
+        if (m.getDisplayCount() < 2) {
+            shopParserLogger.warn("line %: % has % display(s), there is nothing to compare",
+                    lineNumber, m.getName(), m.getDisplayCount());
+            return;
+        }
+        m.assist();
     }
 
     // BUY model manager
@@ -554,9 +600,19 @@ public class Main {
         }
         Display d = displayOrError(words[1], lineNumber);
         DisplayManager m = managerOrError(words[2], lineNumber);
-        if (d != null && m != null) {
-            m.buyDisplay(d); // INFO if bought, ERROR if the manager does not have it
+        // if (d != null && m != null) {
+        //     m.buyDisplay(d); // INFO if bought, ERROR if the manager does not have it
+        // }
+        if (d == null || m == null) {
+            return;
         }
+        // ERROR: the display exists, but it is not assigned to this manager (or was already sold)
+        if (!m.hasDisplay(d)) {
+            shopParserLogger.error("line %: cannot buy % from %, it is not assigned to % (or was already sold)",
+                    lineNumber, d.getModel(), m.getName(), m.getName());
+            return;
+        }
+        m.buyDisplay(d); // INFO, and WARN if the manager is left with 0 displays
     }
 
     // findDisplay + ERROR with the line number if it does not exist
@@ -590,8 +646,14 @@ public class Main {
             return;
         }
         String name = words[1];
+        // if (findManager(name) != null) {
+        //     shopParserLogger.error("line %: manager % already exists, the line is ignored", lineNumber, name);
+        //     return;
+        // }
+        // WARN: the manager the file wants already exists, nothing is lost -> the line is skipped
+        // (creating a second Carol would make "Carol" ambiguous, so we keep the first one)
         if (findManager(name) != null) {
-            shopParserLogger.error("line %: manager % already exists, the line is ignored", lineNumber, name);
+            shopParserLogger.warn("line %: manager % already exists, the line is ignored", lineNumber, name);
             return;
         }
         managers.add(new DisplayManager(name, shopManagerLogger));
@@ -603,22 +665,39 @@ public class Main {
             return;
         }
         String model = words[1];
+        // if (findDisplay(model) != null) {
+        //     shopParserLogger.error("line %: display % already exists, the line is ignored", lineNumber, model);
+        //     return;
+        // }
+        // WARN: same reason as for MANAGER, the display already exists, the first one is kept
         if (findDisplay(model) != null) {
-            shopParserLogger.error("line %: display % already exists, the line is ignored", lineNumber, model);
+            shopParserLogger.warn("line %: display % already exists, the line is ignored", lineNumber, model);
             return;
         }
+        int width, height;
+        float ppi;
         try {
-            int width = Integer.parseInt(words[2]);
-            int height = Integer.parseInt(words[3]);
-            float ppi = Float.parseFloat(words[4]);
-            displays.add(new Display(model, width, height, ppi, shopDisplayLogger));
+            width = Integer.parseInt(words[2]);
+            height = Integer.parseInt(words[3]);
+            ppi = Float.parseFloat(words[4]);
         } catch (NumberFormatException e) {
-            // "abc" instead of a number
-            shopParserLogger.error("line %: display % has a value that is not a number (%)",
+            // "abc" instead of a number, or a number too big for an int
+            shopParserLogger.error("line %: display % has a value that is not a valid number (%)",
                     lineNumber, model, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            // zero or negative values: the Display constructor already logged the ERROR
+            return;
         }
+        // Float.parseFloat also accepts the words "NaN" and "Infinity": they are not real sizes
+        if (Float.isNaN(ppi) || Float.isInfinite(ppi)) {
+            shopParserLogger.error("line %: display % has an invalid ppi (%)", lineNumber, model, words[4]);
+            return;
+        }
+        // checked here too, so the ERROR has the line number (the constructor would throw)
+        if (width <= 0 || height <= 0 || ppi <= 0) {
+            shopParserLogger.error("line %: display % must have width, height and ppi greater than 0 (got %x% at % ppi)",
+                    lineNumber, model, width, height, ppi);
+            return;
+        }
+        displays.add(new Display(model, width, height, ppi, shopDisplayLogger));
     }
 
     // checks how many words come after the command; logs an ERROR if the number is wrong
@@ -919,7 +998,8 @@ public class Main {
             displays.clear();
 
             for (int i = 0; i < commands.size(); i++) {
-                parseCommand(commands.get(i), i + 1); // line numbers start from 1
+                // parseCommand(commands.get(i), i + 1); // line numbers start from 1
+                parseCommandSafely(commands.get(i), i + 1); // never crashes because of one line
             }
 
             // what was created today
