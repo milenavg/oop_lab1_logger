@@ -478,169 +478,180 @@ class CommandReader {
     }
 }
 
-// Shop: executes the lines of a command file
-// Decisions (for the report):
-//  - the file is read LINE BY LINE (not token by token like the Scanner in the annex):
-//    a line with a missing argument fails alone and does not "eat" the next line
-//  - COMMANDS are NOT case-sensitive: assist = ASSIST = Assist
-//  - NAMES (managers, displays) ARE case-sensitive: carol is not Carol
-//  - every wrong line logs an ERROR with its line number and is skipped; the shop goes on
-class Shop {
-    private final Map<String, DisplayManager> managers = new LinkedHashMap<>();
-    private final Map<String, Display> displays = new LinkedHashMap<>();
-    private final Logger parserLogger;  // problems in the file itself
-    private final Logger managerLogger; // given to every manager created by the shop
-    private final Logger displayLogger; // given to every display created by the shop
+public class Main {
+    
+    // the created managers and displays
+    static List<DisplayManager> managers = new ArrayList<>();
+    static List<Display> displays = new ArrayList<>();
 
-    public Shop(Logger parserLogger, Logger managerLogger, Logger displayLogger) {
-        this.parserLogger = parserLogger;
-        this.managerLogger = managerLogger;
-        this.displayLogger = displayLogger;
-    }
+    // set in main, with the shared formatter and sink
+    static Logger shopParserLogger;   // problems in the file itself
+    static Logger shopManagerLogger;  // given to every manager that is created
+    static Logger shopDisplayLogger;  // given to every display that is created
 
-    public void run(List<String> lines) {
-        for (int i = 0; i < lines.size(); i++) {
-            execute(i + 1, lines.get(i)); // line numbers start from 1
-        }
-    }
-
-    private void execute(int lineNo, String line) {
+    // takes ONE line, splits it into words and runs the right action
+    static void parseCommand(String line, int lineNumber) {
         String trimmed = line.trim();
+        // empty line or comment: nothing to do
         if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-            return; // empty line or comment
+            return;
         }
-        String[] parts = trimmed.split("\\s+"); // words separated by one or more spaces
-        String command = parts[0].toUpperCase(); // commands are not case-sensitive
+
+        String[] words = trimmed.split("\\s+");   // one or more spaces between words
+        String command = words[0].toUpperCase();  // commands are not case-sensitive
 
         switch (command) {
-            case "MANAGER" -> createManager(lineNo, parts);
-            case "DISPLAY" -> createDisplay(lineNo, parts);
-            case "ASSIGN" -> assign(lineNo, parts);
-            case "ASSIST" -> assist(lineNo, parts);
-            case "BUY" -> buy(lineNo, parts);
-            case "COMPARE" -> compare(lineNo, parts);
-            default -> parserLogger.error("line %: unknown command \"%\"", lineNo, parts[0]);
-        }
-    }
-
-    // MANAGER name
-    private void createManager(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 1, "MANAGER name")) {
-            return;
-        }
-        String name = parts[1];
-        if (managers.containsKey(name)) {
-            parserLogger.error("line %: manager % already exists, the line is ignored", lineNo, name);
-            return;
-        }
-        managers.put(name, new DisplayManager(name, managerLogger));
-    }
-
-    // DISPLAY model width height ppi
-    private void createDisplay(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 4, "DISPLAY model width height ppi")) {
-            return;
-        }
-        String model = parts[1];
-        if (displays.containsKey(model)) {
-            parserLogger.error("line %: display % already exists, the line is ignored", lineNo, model);
-            return;
-        }
-        try {
-            int width = Integer.parseInt(parts[2]);
-            int height = Integer.parseInt(parts[3]);
-            float ppi = Float.parseFloat(parts[4]);
-            displays.put(model, new Display(model, width, height, ppi, displayLogger));
-        } catch (NumberFormatException e) {
-            parserLogger.error("line %: display % has a value that is not a number (%)",
-                    lineNo, model, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            // zero or negative values: the Display constructor already logged the ERROR
+            case "MANAGER" -> createManager(words, lineNumber);
+            case "DISPLAY" -> createDisplay(words, lineNumber);
+            case "ASSIGN" -> assign(words, lineNumber);
+            case "COMPARE" -> compare(words, lineNumber);
+            case "ASSIST" -> assist(words, lineNumber);
+            case "BUY" -> buy(words, lineNumber);
+            default -> shopParserLogger.error("line %: unknown command \"%\"", lineNumber, words[0]);
         }
     }
 
     // ASSIGN model manager
-    private void assign(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 2, "ASSIGN model manager")) {
+    // the display already exists (created by DISPLAY), the manager only receives a reference -> aggregation
+    static void assign(String[] words, int lineNumber) {
+        if (!hasArguments(words, 2, "ASSIGN model manager", lineNumber)) {
             return;
         }
-        Display d = findDisplay(lineNo, parts[1]);
-        DisplayManager m = findManager(lineNo, parts[2]);
+        Display d = displayOrError(words[1], lineNumber);
+        DisplayManager m = managerOrError(words[2], lineNumber);
         if (d != null && m != null) {
-            m.assignDisplay(d);
-        }
-    }
-
-    // ASSIST manager
-    private void assist(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 1, "ASSIST manager")) {
-            return;
-        }
-        DisplayManager m = findManager(lineNo, parts[1]);
-        if (m != null) {
-            m.assist();
-        }
-    }
-
-    // BUY model manager
-    private void buy(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 2, "BUY model manager")) {
-            return;
-        }
-        Display d = findDisplay(lineNo, parts[1]);
-        DisplayManager m = findManager(lineNo, parts[2]);
-        if (d != null && m != null) {
-            m.buyDisplay(d); // logs INFO, or ERROR if the manager does not have it
+            m.assignDisplay(d); // WARN inside if it is assigned twice
         }
     }
 
     // COMPARE model1 model2
-    private void compare(int lineNo, String[] parts) {
-        if (!hasArguments(lineNo, parts, 2, "COMPARE model1 model2")) {
+    static void compare(String[] words, int lineNumber) {
+        if (!hasArguments(words, 2, "COMPARE model1 model2", lineNumber)) {
             return;
         }
-        Display a = findDisplay(lineNo, parts[1]);
-        Display b = findDisplay(lineNo, parts[2]);
+        Display a = displayOrError(words[1], lineNumber);
+        Display b = displayOrError(words[2], lineNumber);
         if (a != null && b != null) {
             a.compareWithMonitor(b);
         }
     }
 
-    // checks the number of words after the command; logs an ERROR if it is wrong
-    private boolean hasArguments(int lineNo, String[] parts, int expected, String usage) {
-        int given = parts.length - 1;
+    // ASSIST manager
+    static void assist(String[] words, int lineNumber) {
+        if (!hasArguments(words, 1, "ASSIST manager", lineNumber)) {
+            return;
+        }
+        DisplayManager m = managerOrError(words[1], lineNumber);
+        if (m != null) {
+            m.assist(); // WARN inside if there is nothing to compare
+        }
+    }
+
+    // BUY model manager
+    static void buy(String[] words, int lineNumber) {
+        if (!hasArguments(words, 2, "BUY model manager", lineNumber)) {
+            return;
+        }
+        Display d = displayOrError(words[1], lineNumber);
+        DisplayManager m = managerOrError(words[2], lineNumber);
+        if (d != null && m != null) {
+            m.buyDisplay(d); // INFO if bought, ERROR if the manager does not have it
+        }
+    }
+
+    // findDisplay + ERROR with the line number if it does not exist
+    static Display displayOrError(String model, int lineNumber) {
+        Display d = findDisplay(model);
+        if (d == null) {
+            shopParserLogger.error("line %: display % does not exist", lineNumber, model);
+        }
+        return d;
+    }
+
+    // findManager + ERROR with the line number if it does not exist
+    static DisplayManager managerOrError(String name, int lineNumber) {
+        DisplayManager m = findManager(name);
+        if (m == null) {
+            // names are case-sensitive: give a hint if only the capital letters are different
+            String hint = "";
+            for (DisplayManager existing : managers) {
+                if (existing.getName().equalsIgnoreCase(name)) {
+                    hint = " (did you mean " + existing.getName() + "? names are case-sensitive)";
+                }
+            }
+            shopParserLogger.error("line %: manager % does not exist%", lineNumber, name, hint);
+        }
+        return m;
+    }
+
+    // MANAGER name
+    static void createManager(String[] words, int lineNumber) {
+        if (!hasArguments(words, 1, "MANAGER name", lineNumber)) {
+            return;
+        }
+        String name = words[1];
+        if (findManager(name) != null) {
+            shopParserLogger.error("line %: manager % already exists, the line is ignored", lineNumber, name);
+            return;
+        }
+        managers.add(new DisplayManager(name, shopManagerLogger));
+    }
+
+    // DISPLAY model width height ppi
+    static void createDisplay(String[] words, int lineNumber) {
+        if (!hasArguments(words, 4, "DISPLAY model width height ppi", lineNumber)) {
+            return;
+        }
+        String model = words[1];
+        if (findDisplay(model) != null) {
+            shopParserLogger.error("line %: display % already exists, the line is ignored", lineNumber, model);
+            return;
+        }
+        try {
+            int width = Integer.parseInt(words[2]);
+            int height = Integer.parseInt(words[3]);
+            float ppi = Float.parseFloat(words[4]);
+            displays.add(new Display(model, width, height, ppi, shopDisplayLogger));
+        } catch (NumberFormatException e) {
+            // "abc" instead of a number
+            shopParserLogger.error("line %: display % has a value that is not a number (%)",
+                    lineNumber, model, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            // zero or negative values: the Display constructor already logged the ERROR
+        }
+    }
+
+    // checks how many words come after the command; logs an ERROR if the number is wrong
+    static boolean hasArguments(String[] words, int expected, String usage, int lineNumber) {
+        int given = words.length - 1;
         if (given != expected) {
-            parserLogger.error("line %: % expects % argument(s) but got % (usage: %)",
-                    lineNo, parts[0], expected, given, usage);
+            shopParserLogger.error("line %: % expects % argument(s) but got % (usage: %)",
+                    lineNumber, words[0], expected, given, usage);
             return false;
         }
         return true;
     }
 
-    private Display findDisplay(int lineNo, String model) {
-        Display d = displays.get(model);
-        if (d == null) {
-            parserLogger.error("line %: display % does not exist", lineNo, model);
-        }
-        return d;
-    }
-
-    private DisplayManager findManager(int lineNo, String name) {
-        DisplayManager m = managers.get(name);
-        if (m == null) {
-            String hint = "";
-            for (String existing : managers.keySet()) {
-                if (existing.equalsIgnoreCase(name)) {
-                    hint = " (did you mean " + existing + "? names are case-sensitive)";
-                }
+    // finds a manager by name with a simple loop; null if there is none
+    static DisplayManager findManager(String name) {
+        for (DisplayManager m : managers) {
+            if (m.getName().equals(name)) {
+                return m;
             }
-            parserLogger.error("line %: manager % does not exist%", lineNo, name, hint);
         }
-        return m;
+        return null;
     }
-}
 
-public class Main {
+    // finds a display by model with a simple loop; null if there is none
+    static Display findDisplay(String model) {
+        for (Display d : displays) {
+            if (d.getModel().equals(model)) {
+                return d;
+            }
+        }
+        return null;
+    }
+
     public static void main(String[] args) {
         System.out.println("Task 1: Formatter test");
         // Task 1 version (static format):
@@ -885,12 +896,43 @@ public class Main {
                 ? new String[] { args[0] }
                 : new String[] { "shop-monday.txt", "shop-tuesday.txt" };
 
+        // for (String file : commandFiles) {
+        //     System.out.println();
+        //     System.out.println("Shop: running " + file);
+        //     List<String> commands = new CommandReader(file, readerLogger).readLines();
+        //     Shop shop = new Shop(parserLogger, managerLogger, displayLogger); // a new shop every day
+        //     shop.run(commands);
+        // }
+
+        // the parser uses the same shared formatter and sink
+        shopParserLogger = parserLogger;
+        shopManagerLogger = managerLogger;
+        shopDisplayLogger = displayLogger;
+
         for (String file : commandFiles) {
             System.out.println();
             System.out.println("Shop: running " + file);
             List<String> commands = new CommandReader(file, readerLogger).readLines();
-            Shop shop = new Shop(parserLogger, managerLogger, displayLogger); // a new shop every day
-            shop.run(commands);
+
+            // a new day: start with empty lists
+            managers.clear();
+            displays.clear();
+
+            for (int i = 0; i < commands.size(); i++) {
+                parseCommand(commands.get(i), i + 1); // line numbers start from 1
+            }
+
+            // what was created today
+            System.out.print("Managers:");
+            for (DisplayManager m : managers) {
+                System.out.print(" " + m.getName());
+            }
+            System.out.println();
+            System.out.print("Displays:");
+            for (Display d : displays) {
+                System.out.print(" " + d.getModel());
+            }
+            System.out.println();
         }
     }
 }
