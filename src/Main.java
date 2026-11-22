@@ -237,15 +237,33 @@ class Display {
     private final int width;
     private final int height;
     private final float ppi;
+    private final Logger logger; // received from outside (aggregation), shared with other displays
 
     // two values closer than this are considered equal (float/double are not exact)
     private static final double EPSILON = 0.05;
 
-    public Display(String model, int width, int height, float ppi) {
+    // Version without logger (before "Add loggers"):
+    // public Display(String model, int width, int height, float ppi) {
+    //     this.model = model;
+    //     this.width = width;
+    //     this.height = height;
+    //     this.ppi = ppi;
+    // }
+
+    public Display(String model, int width, int height, float ppi, Logger logger) {
+        this.logger = logger;
+        // ERROR: a display with zero/negative values can't exist (the diagonal would divide by 0)
+        if (width <= 0 || height <= 0 || ppi <= 0) {
+            logger.error("Cannot create display %: invalid values %x% at % ppi", model, width, height, ppi);
+            throw new IllegalArgumentException("Invalid display values for " + model);
+        }
         this.model = model;
         this.width = width;
         this.height = height;
         this.ppi = ppi;
+        // TRACE: a display is created
+        logger.trace("Display created: % (%x%, % ppi, %\")", model, width, height, ppi,
+                String.format("%.1f", getDiagonal()));
     }
 
     public String getModel() {
@@ -332,9 +350,18 @@ class Display {
 class DisplayManager {
     private final String name;
     private final List<Display> assignedDisplays = new ArrayList<>();
+    private final Logger logger; // received from outside (aggregation), shared with other managers
 
-    public DisplayManager(String name) {
+    // Version without logger (before "Add loggers"):
+    // public DisplayManager(String name) {
+    //     this.name = name;
+    // }
+
+    public DisplayManager(String name, Logger logger) {
         this.name = name;
+        this.logger = logger;
+        // TRACE: a manager is created
+        logger.trace("Manager created: %", name);
     }
 
     public String getName() {
@@ -343,16 +370,29 @@ class DisplayManager {
 
     // adds a display to the list (only the reference is stored, not a copy)
     public void assignDisplay(Display d) {
+        // ERROR: there is nothing to assign
+        if (d == null) {
+            logger.error("% cannot be assigned a display that does not exist (null)", name);
+            return;
+        }
+        // WARN: suspicious: the same display twice in one list
+        if (assignedDisplays.contains(d)) {
+            logger.warn("% already has %, it is now in the list twice", name, d.getModel());
+        }
         assignedDisplays.add(d);
-        System.out.println(name + " was assigned " + d.getModel() + ".");
+        // System.out.println(name + " was assigned " + d.getModel() + ".");
+        // TRACE: a display is assigned
+        logger.trace("% was assigned %", name, d.getModel());
     }
 
     // compares each display with the next one: 0 with 1, 1 with 2, ... until the end of the list
     public void assist() {
         System.out.println(name + " is helping you choose:");
         if (assignedDisplays.size() < 2) {
-            System.out.println(name + " has " + assignedDisplays.size()
-                    + " display(s), nothing to compare.");
+            // System.out.println(name + " has " + assignedDisplays.size()
+            //         + " display(s), nothing to compare.");
+            // WARN: not wrong, but the manager can't really help
+            logger.warn("% has % display(s), nothing to compare", name, assignedDisplays.size());
             return;
         }
         for (int i = 0; i < assignedDisplays.size() - 1; i++) {
@@ -366,11 +406,24 @@ class DisplayManager {
     // removes the display from the list and returns the reference to it
     // returns null if this manager does not have that display
     public Display buyDisplay(Display d) {
+        // ERROR: nothing to buy
+        if (d == null) {
+            logger.error("Cannot buy from %: the display does not exist (null)", name);
+            return null;
+        }
         if (assignedDisplays.remove(d)) {
-            System.out.println("You bought " + d.getModel() + " from " + name + ".");
+            // System.out.println("You bought " + d.getModel() + " from " + name + ".");
+            // INFO: a display is bought
+            logger.info("% was bought from %", d.getModel(), name);
+            // WARN: not wrong, but suspicious: the manager has nothing left to sell
+            if (assignedDisplays.isEmpty()) {
+                logger.warn("% has 0 displays left after the purchase", name);
+            }
             return d;
         }
-        System.out.println(name + " does not have " + d.getModel() + ", you can't buy it here.");
+        // System.out.println(name + " does not have " + d.getModel() + ", you can't buy it here.");
+        // ERROR: the purchase failed
+        logger.error("Cannot buy % from %: % does not have it", d.getModel(), name, name);
         return null;
     }
 
@@ -525,9 +578,21 @@ public class Main {
         // Shop: Display with three displays
         System.out.println();
         System.out.println("Shop: Display test");
-        Display samsung = new Display("Samsung-Odyssey-G5", 2560, 1440, 93.0f);       // ~31.6"
-        Display iphone = new Display("iPhone-15-Pro", 2556, 1179, 460.0f);           // ~6.1"
-        Display neoG9 = new Display("Samsung-Odyssey-Neo-G9", 7680, 2160, 140.0f);   // ~57.0"
+
+        // Shop loggers
+        Logger.setLevel(LogLevel.TRACE);
+        Formatter shopFormatter = new Formatter("[%t] [%l] %n: %m");
+        ConsoleSink shopSink = new ConsoleSink();
+        Logger displayLogger = new Logger("Display", shopFormatter, shopSink);
+        Logger managerLogger = new Logger("Manager", shopFormatter, shopSink);
+
+        // Display samsung = new Display("Samsung-Odyssey-G5", 2560, 1440, 93.0f);       // ~31.6"
+        // Display iphone = new Display("iPhone-15-Pro", 2556, 1179, 460.0f);           // ~6.1"
+        // Display neoG9 = new Display("Samsung-Odyssey-Neo-G9", 7680, 2160, 140.0f);   // ~57.0"
+        Display samsung = new Display("Samsung-Odyssey-G5", 2560, 1440, 93.0f, displayLogger);      // ~31.6"
+        Display iphone = new Display("iPhone-15-Pro", 2556, 1179, 460.0f, displayLogger);          // ~6.1"
+        Display neoG9 = new Display("Samsung-Odyssey-Neo-G9", 7680, 2160, 140.0f, displayLogger);  // ~57.0"
+        System.out.println();
 
         samsung.compareWithMonitor(iphone);   // trade-off: samsung bigger, iphone sharper
         System.out.println();
@@ -540,10 +605,13 @@ public class Main {
         // Shop: DisplayManager test
         System.out.println();
         System.out.println("Shop: DisplayManager test");
-        Display macbook = new Display("MacBook-Air-13", 2560, 1664, 224.0f);   // ~13.6"
+        // Display macbook = new Display("MacBook-Air-13", 2560, 1664, 224.0f);   // ~13.6"
+        Display macbook = new Display("MacBook-Air-13", 2560, 1664, 224.0f, displayLogger);   // ~13.6"
 
-        DisplayManager ana = new DisplayManager("Ana");
-        DisplayManager bob = new DisplayManager("Bob");
+        // DisplayManager ana = new DisplayManager("Ana");
+        // DisplayManager bob = new DisplayManager("Bob");
+        DisplayManager ana = new DisplayManager("Ana", managerLogger);
+        DisplayManager bob = new DisplayManager("Bob", managerLogger);
 
         // the SAME samsung object is assigned to both managers
         ana.assignDisplay(samsung);
@@ -566,5 +634,23 @@ public class Main {
 
         // buying something a manager does not have
         bob.buyDisplay(iphone);
+
+        // Shop: logging of suspicious (WARN) and failing (ERROR)
+        System.out.println();
+        System.out.println("Shop: WARN and ERROR events");
+        DisplayManager cara = new DisplayManager("Cara", managerLogger);
+        cara.assignDisplay(macbook);
+        cara.assignDisplay(macbook); // WARN: same display twice
+        cara.assignDisplay(null); // ERROR: nothing to assign
+        cara.buyDisplay(macbook);
+        cara.buyDisplay(macbook); // WARN: 0 left after the purchase
+        cara.assist(); // WARN: nothing to compare
+        cara.buyDisplay(macbook); // ERROR: Cara has no macbook anymore
+
+        try {
+            new Display("Broken-Monitor", 0, 1080, 90.0f, displayLogger); // ERROR: invalid values
+        } catch (IllegalArgumentException e) {
+            System.out.println("Display was not created: " + e.getMessage());
+        }
     }
 }
