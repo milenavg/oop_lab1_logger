@@ -229,6 +229,101 @@ class ParenthesesValidator {
     }
 }
 
+// Shop
+class Display {
+    private final String model;
+    private final int width;
+    private final int height;
+    private final float ppi;
+
+    // two values closer than this are considered equal (float/double are not exact)
+    private static final double EPSILON = 0.05;
+
+    public Display(String model, int width, int height, float ppi) {
+        this.model = model;
+        this.width = width;
+        this.height = height;
+        this.ppi = ppi;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    // physical diagonal in inches: sqrt(width^2 + height^2) / ppi
+    public double getDiagonal() {
+        return Math.sqrt((double) width * width + (double) height * height) / ppi;
+    }
+
+    // 1 if a is bigger, -1 if a is smaller, 0 if they are (almost) equal
+    private static int compareValues(double a, double b) {
+        if (Math.abs(a - b) < EPSILON) {
+            return 0;
+        }
+        return a > b ? 1 : -1;
+    }
+
+    // compares the physical size of the screens
+    // returns 1 if this is bigger, -1 if smaller, 0 if the same size
+    public int compareSize(Display other) {
+        double mine = this.getDiagonal();
+        double theirs = other.getDiagonal();
+        int result = compareValues(mine, theirs);
+
+        String me = String.format("%s (%.1f\")", this.model, mine);
+        String them = String.format("%s (%.1f\")", other.model, theirs);
+
+        if (result > 0) {
+            System.out.println(me + " is bigger than " + them + ".");
+        } else if (result < 0) {
+            System.out.println(me + " is smaller than " + them + ".");
+        } else {
+            System.out.println(me + " is the same size as " + them + ".");
+        }
+        return result;
+    }
+
+    // compares the sharpness (ppi)
+    // returns 1 if this is sharper, -1 if less sharp, 0 if equally sharp
+    public int compareSharpness(Display other) {
+        int result = compareValues(this.ppi, other.ppi);
+
+        String me = String.format("%s (%.1f ppi)", this.model, this.ppi);
+        String them = String.format("%s (%.1f ppi)", other.model, other.ppi);
+
+        if (result > 0) {
+            System.out.println(me + " is sharper than " + them + ".");
+        } else if (result < 0) {
+            System.out.println(me + " is less sharp than " + them + ".");
+        } else {
+            System.out.println(me + " is as sharp as " + them + ".");
+        }
+        return result;
+    }
+
+    public void compareWithMonitor(Display other) {
+        System.out.println("Comparing " + this.model + " with " + other.model + ":");
+        int size = compareSize(other);
+        int sharpness = compareSharpness(other);
+
+        String verdict;
+        if (size == 0 && sharpness == 0) {
+            verdict = "they are equivalent, pick the one you like more.";
+        } else if (size >= 0 && sharpness >= 0) {
+            verdict = this.model + " is better: it is not smaller and not less sharp.";
+        } else if (size <= 0 && sharpness <= 0) {
+            verdict = other.model + " is better: it is not smaller and not less sharp.";
+        } else if (size > 0) {
+            verdict = "it is a trade-off: " + this.model + " is bigger, but "
+                    + other.model + " is sharper.";
+        } else {
+            verdict = "it is a trade-off: " + other.model + " is bigger, but "
+                    + this.model + " is sharper.";
+        }
+        System.out.println("Verdict: " + verdict);
+    }
+}
+
 public class Main {
     public static void main(String[] args) {
         System.out.println("Task 1: Formatter test");
@@ -366,5 +461,20 @@ public class Main {
             demo.log(LogLevel.WARN, "warn message");
             demo.log(LogLevel.ERROR, "error message");
         }
+
+        // Shop: Display with three displays
+        System.out.println();
+        System.out.println("Shop: Display test");
+        Display samsung = new Display("Samsung-Odyssey-G5", 2560, 1440, 93.0f);       // ~31.6"
+        Display iphone = new Display("iPhone-15-Pro", 2556, 1179, 460.0f);           // ~6.1"
+        Display neoG9 = new Display("Samsung-Odyssey-Neo-G9", 7680, 2160, 140.0f);   // ~57.0"
+
+        samsung.compareWithMonitor(iphone);   // trade-off: samsung bigger, iphone sharper
+        System.out.println();
+        samsung.compareWithMonitor(neoG9);    // neoG9 is bigger AND sharper
+        System.out.println();
+        neoG9.compareWithMonitor(iphone);     // trade-off
+        System.out.println();
+        samsung.compareWithMonitor(samsung);  // same display: equivalent
     }
 }
