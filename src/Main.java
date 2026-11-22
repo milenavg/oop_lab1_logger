@@ -1,5 +1,7 @@
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -324,6 +326,64 @@ class Display {
     }
 }
 
+// Shop: a shop assistant who is assigned some displays, compares them and sells them
+// DisplayManager -> Display is aggregation (0..*): the displays are created outside,
+// the manager only keeps references to them, and the same display can be in many lists
+class DisplayManager {
+    private final String name;
+    private final List<Display> assignedDisplays = new ArrayList<>();
+
+    public DisplayManager(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    // adds a display to the list (only the reference is stored, not a copy)
+    public void assignDisplay(Display d) {
+        assignedDisplays.add(d);
+        System.out.println(name + " was assigned " + d.getModel() + ".");
+    }
+
+    // compares each display with the next one: 0 with 1, 1 with 2, ... until the end of the list
+    public void assist() {
+        System.out.println(name + " is helping you choose:");
+        if (assignedDisplays.size() < 2) {
+            System.out.println(name + " has " + assignedDisplays.size()
+                    + " display(s), nothing to compare.");
+            return;
+        }
+        for (int i = 0; i < assignedDisplays.size() - 1; i++) {
+            Display current = assignedDisplays.get(i);
+            Display next = assignedDisplays.get(i + 1);
+            current.compareWithMonitor(next); // reuse of the Display methods
+            System.out.println();
+        }
+    }
+
+    // removes the display from the list and returns the reference to it
+    // returns null if this manager does not have that display
+    public Display buyDisplay(Display d) {
+        if (assignedDisplays.remove(d)) {
+            System.out.println("You bought " + d.getModel() + " from " + name + ".");
+            return d;
+        }
+        System.out.println(name + " does not have " + d.getModel() + ", you can't buy it here.");
+        return null;
+    }
+
+    // helper for testing: prints what the manager still has
+    public void showDisplays() {
+        System.out.print(name + " has " + assignedDisplays.size() + " display(s):");
+        for (Display d : assignedDisplays) {
+            System.out.print(" " + d.getModel());
+        }
+        System.out.println();
+    }
+}
+
 public class Main {
     public static void main(String[] args) {
         System.out.println("Task 1: Formatter test");
@@ -476,5 +536,35 @@ public class Main {
         neoG9.compareWithMonitor(iphone);     // trade-off
         System.out.println();
         samsung.compareWithMonitor(samsung);  // same display: equivalent
+
+        // Shop: DisplayManager test
+        System.out.println();
+        System.out.println("Shop: DisplayManager test");
+        Display macbook = new Display("MacBook-Air-13", 2560, 1664, 224.0f);   // ~13.6"
+
+        DisplayManager ana = new DisplayManager("Ana");
+        DisplayManager bob = new DisplayManager("Bob");
+
+        // the SAME samsung object is assigned to both managers
+        ana.assignDisplay(samsung);
+        ana.assignDisplay(iphone);
+        ana.assignDisplay(neoG9);
+        bob.assignDisplay(samsung);
+        bob.assignDisplay(macbook);
+
+        System.out.println();
+        ana.assist();
+        bob.assist();
+
+        // buy the shared display from Ana
+        Display bought = ana.buyDisplay(samsung);
+        System.out.println("bought == samsung ? " + (bought == samsung)); // same object, not a copy
+
+        // what they still have?
+        ana.showDisplays();
+        bob.showDisplays();
+
+        // buying something a manager does not have
+        bob.buyDisplay(iphone);
     }
 }
